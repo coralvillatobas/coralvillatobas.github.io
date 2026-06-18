@@ -1,0 +1,352 @@
+/* ═══════════════════════════════════════════════════════════
+   CORAL MIGUEL DE AMBIELA — Sistema de medios (estilos)
+   No modifica main.css/home.css/pages.css; se añade aparte.
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Huecos arrastrables ─────────────────────────────────── */
+.img-ph[data-media-id] { transition: outline-color 0.2s ease; }
+
+.img-ph.media-empty::after {
+  content: 'Arrastra una foto o vídeo aquí';
+  position: absolute;
+  inset: auto 0.6rem 0.6rem 0.6rem;
+  text-align: center;
+  font-family: var(--font-body);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.7);
+  background: rgba(0,0,0,0.25);
+  border-radius: 4px;
+  padding: 0.4rem 0.5rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.img-ph.media-empty:hover::after { opacity: 1; }
+
+.img-ph.media-dragover {
+  outline: 3px dashed var(--gold-soft);
+  outline-offset: -3px;
+}
+.img-ph.media-dragover::after { opacity: 1; }
+
+.img-ph.media-filled::before { display: none; } /* oculta el icono ♪ del placeholder */
+.img-ph.media-filled { cursor: zoom-in; }
+.img-ph.media-filled[data-no-lightbox="true"] { cursor: default; }
+
+.img-ph .media-content {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  z-index: 0;
+}
+
+/* La lupa de la galería no debe bloquear el arrastre ni el clic sobre la foto */
+.gallery-overlay { pointer-events: none; }
+
+/* El botón de YouTube siempre por encima de la miniatura, aunque se arrastre una foto */
+.video-thumb .video-play-btn { z-index: 2; }
+
+/* ── Botón flotante "Conectar carpeta" ───────────────────── */
+.media-connect-btn {
+  position: fixed;
+  bottom: 2rem;
+  left: 2rem;
+  z-index: 850;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: var(--garnet);
+  color: var(--white);
+  padding: 0.85rem 1.4rem;
+  border-radius: 999px;
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  box-shadow: var(--shadow-lg);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+.media-connect-btn:hover { transform: translateY(-2px); background: var(--garnet-light); }
+.media-connect-btn.pulse { animation: mediaPulse 0.4s ease 3; }
+@keyframes mediaPulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.07); }
+}
+
+/* ── Aviso flotante (toast) ──────────────────────────────── */
+.media-toast {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translate(-50%, 10px);
+  background: var(--ink);
+  color: var(--white);
+  padding: 0.7rem 1.3rem;
+  border-radius: 999px;
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 900;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.media-toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ── Visor ampliado (lightbox) ───────────────────────────── */
+.media-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.media-lightbox.open { opacity: 1; pointer-events: auto; }
+
+.media-lightbox-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(26,16,20,0.92);
+  backdrop-filter: blur(6px);
+}
+
+.media-lightbox-stage {
+  position: relative;
+  z-index: 1;
+  max-width: 90vw;
+  max-height: 86vh;
+  transform: scale(0.92);
+  transition: transform 0.3s var(--ease-out);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  line-height: 0;
+}
+.media-lightbox.open .media-lightbox-stage { transform: scale(1); }
+.media-lightbox-stage img,
+.media-lightbox-stage video {
+  display: block;
+  max-width: 90vw;
+  max-height: 86vh;
+  width: auto;
+  height: auto;
+}
+
+.media-lightbox-close {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.8rem;
+  z-index: 2;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.12);
+  color: var(--white);
+  font-size: 1.6rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+}
+.media-lightbox-close:hover { background: rgba(255,255,255,0.22); }
+
+/* Reproductor de YouTube dentro del visor ampliado */
+.media-lightbox-stage.is-youtube {
+  width: min(90vw, 960px);
+  aspect-ratio: 16 / 9;
+  max-height: 86vh;
+}
+.media-lightbox-stage.is-youtube iframe {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  border: 0;
+}
+
+/* ── Textos editables (doble clic) ──────────────────────── */
+.editable {
+  cursor: text;
+  border-radius: 3px;
+  transition: background 0.15s ease, outline-color 0.15s ease;
+  outline: 1px dashed transparent;
+  outline-offset: 2px;
+}
+.editable:hover {
+  background: rgba(184,150,12,0.08);
+  outline-color: rgba(184,150,12,0.45);
+}
+.editable.editing {
+  outline: none;
+  background: transparent;
+}
+.editable-input {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  background: var(--parchment);
+  border: 1px dashed var(--gold);
+  border-radius: 4px;
+  padding: 0.15em 0.4em;
+  resize: vertical;
+}
+.editable-input:focus { outline: none; border-style: solid; }
+
+/* Insignia próximamente/realizado, ahora pulsable */
+[data-edit-type="badge"] { cursor: pointer; user-select: none; }
+[data-edit-type="badge"]:hover { filter: brightness(0.96); }
+
+/* ── Botón "editar vídeo" sobre las miniaturas de YouTube ── */
+.media-edit-btn {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  z-index: 3;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: rgba(26,16,20,0.55);
+  color: var(--white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  opacity: 0;
+  transition: opacity 0.2s ease, background 0.2s ease;
+}
+.video-thumb:hover .media-edit-btn,
+.media-edit-btn:focus-visible {
+  opacity: 1;
+}
+.media-edit-btn:hover { background: var(--garnet); }
+
+/* ── Modal para pegar el enlace de YouTube ──────────────── */
+.media-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+.media-modal.open { opacity: 1; pointer-events: auto; }
+.media-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(26,16,20,0.75);
+  backdrop-filter: blur(4px);
+}
+.media-modal-card {
+  position: relative;
+  z-index: 1;
+  background: var(--white);
+  color: var(--ink);
+  border-radius: var(--radius-lg);
+  padding: 2rem;
+  width: min(90vw, 420px);
+  box-shadow: var(--shadow-lg);
+  transform: scale(0.95);
+  transition: transform 0.25s var(--ease-out);
+}
+.media-modal.open .media-modal-card { transform: scale(1); }
+.media-modal-card h3 { font-size: 1.3rem; margin-bottom: 0.4rem; }
+.media-modal-card p { font-size: 0.85rem; color: var(--ink-muted); margin-bottom: 1rem; }
+.media-modal-input {
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid rgba(92,16,32,0.18);
+  border-radius: var(--radius);
+  background: var(--parchment);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  margin-bottom: 1.2rem;
+}
+.media-modal-input:focus {
+  outline: none;
+  border-color: var(--garnet);
+  box-shadow: 0 0 0 3px rgba(92,16,32,0.1);
+}
+.media-modal-actions { display: flex; gap: 0.8rem; justify-content: flex-end; }
+
+/* ── Galerías dinámicas (botón "+ añadir foto") ──────────────── */
+.dyn-gallery-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.2rem;
+}
+.dyn-gallery-grid > .img-ph,
+.dyn-gallery-grid > .dyn-gallery-add {
+  flex: 1 1 220px;
+  height: 220px;
+}
+.dyn-gallery-add,
+.gallery-add-item {
+  height: 220px;
+  border: 2px dashed rgba(92,16,32,0.28);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--garnet);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  font-weight: 600;
+  width: 100%;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.gallery-add-item { break-inside: avoid; }
+.dyn-gallery-add:hover,
+.gallery-add-item:hover {
+  background: rgba(92,16,32,0.05);
+  border-color: var(--garnet);
+}
+.dyn-gallery-add i,
+.gallery-add-item i { font-size: 1.7rem; }
+.dyn-slot-remove {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  font-size: 1rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease, background 0.2s ease;
+  z-index: 6;
+}
+.img-ph:hover .dyn-slot-remove { opacity: 1; }
+.dyn-slot-remove:hover { background: var(--garnet); }
+
+/* ── Responsive ──────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .media-connect-btn { left: 1rem; right: 1rem; bottom: 1rem; justify-content: center; }
+  .img-ph.media-empty::after { font-size: 0.6rem; }
+  .media-edit-btn { opacity: 1; } /* en móvil no hay "hover", se ve siempre */
+  .dyn-slot-remove { opacity: 1; }
+}
