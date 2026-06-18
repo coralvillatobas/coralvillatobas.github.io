@@ -1,62 +1,28 @@
 /* ═══════════════════════════════════════════════════════════
    CORAL MIGUEL DE AMBIELA — Sistema de medios y contenido editable
-   Guarda fotos, vídeos y textos de verdad en la carpeta /media del
-   proyecto usando la File System Access API (requiere servir la web
-   por http://localhost, no funciona abriendo el archivo a doble clic).
+   Todo el mundo ve las fotos y textos publicados al cargar la página.
+   Quien inicia sesión con usuario/contraseña entra en modo edición:
+   los cambios se mandan al Worker (coral-edicion-api), que es quien
+   los publica de verdad en GitHub. La web nunca conoce la contraseña
+   real ni la llave de GitHub.
    ═══════════════════════════════════════════════════════════ */
 
 (function () {
   'use strict';
 
+  const WORKER_URL = 'https://coral-edicion-api.coralvillatobas.workers.dev';
+  const TOKEN_KEY = 'coral-edit-token';
+  const mediaBase = location.pathname.includes('/pages/') ? '../media/' : 'media/';
+
   const slots = Array.from(document.querySelectorAll('.img-ph[data-media-id]'));
   const editables = Array.from(document.querySelectorAll('.editable[data-edit-id]'));
   const ytEditButtons = Array.from(document.querySelectorAll('[data-youtube-edit-id]'));
-  const galleryContainers = document.querySelectorAll('[data-gallery-id]');
-  if (slots.length === 0 && editables.length === 0 && galleryContainers.length === 0) return; // esta página no tiene nada que gestionar
-
-  if (!('showDirectoryPicker' in window)) {
-    console.info('Coral media: este navegador no admite acceso a archivos locales (funciona en Edge/Chrome, no en Firefox/Safari). El arrastrar/soltar y la edición quedan desactivados aquí.');
-    return;
-  }
-
-  /* ── Mini almacén IndexedDB, solo para recordar la carpeta elegida ── */
-  const DB_NAME = 'coral-media-db';
-  const STORE = 'handles';
-
-  function openDb() {
-    return new Promise((resolve, reject) => {
-      const req = indexedDB.open(DB_NAME, 1);
-      req.onupgradeneeded = () => req.result.createObjectStore(STORE);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-  }
-  async function idbSet(key, val) {
-    const db = await openDb();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readwrite');
-      tx.objectStore(STORE).put(val, key);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  }
-  async function idbGet(key) {
-    const db = await openDb();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readonly');
-      const req = tx.objectStore(STORE).get(key);
-      req.onsuccess = () => resolve(req.result || null);
-      req.onerror = () => reject(req.error);
-    });
-  }
 
   /* ── Estado ── */
-  let rootHandle = null;
-  let mediaDir = null;
-  let manifest = {};   // fotos/vídeos arrastrados: { mediaId: { file, type } }
-  let content = {};    // textos/estados editables y vídeos de YouTube: { editId: valor }
-  let connectBtn = null;
-  let pendingChange = null; // una acción en espera de tener permiso de carpeta
+  let manifest = {};   // fotos/vídeos: { mediaId: { file, type } }
+  let content = {};    // textos, badges y vídeos de YouTube: { editId: valor }
+  let token = localStorage.getItem(TOKEN_KEY) || null;
+  let editMode = false;
   let toastEl = null;
 
   /* ── Aviso flotante (toast) ── */
@@ -69,103 +35,52 @@
     toastEl.textContent = msg;
     toastEl.classList.add('show');
     clearTimeout(toastEl._t);
-    toastEl._t = setTimeout(() => toastEl.classList.remove('show'), 2400);
+    toastEl._t = setTimeout(() => toastEl.classList.remove('show'), 3200);
   }
 
-  /* ── Botón flotante para conceder/reconectar la carpeta ── */
-  function showConnectButton(label) {
-    if (connectBtn) connectBtn.remove();
-    connectBtn = document.createElement('button');
-    connectBtn.type = 'button';
-    connectBtn.className = 'media-connect-btn';
-    connectBtn.innerHTML = '<i class="fa-solid fa-folder-open" aria-hidden="true"></i> ' + label;
-    connectBtn.addEventListener('click', requestConnection);
-    document.body.appendChild(connectBtn);
-  }
-  function pulseConnectButton() {
-    if (!connectBtn) return;
-    connectBtn.classList.add('pulse');
-    setTimeout(() => connectBtn && connectBtn.classList.remove('pulse'), 1200);
-  }
-  function hideConnectButton() {
-    if (connectBtn) { connectBtn.remove(); connectBtn = null; }
-  }
-  function askToConnect(msg) {
-    showToast(msg);
-    showConnectButton(rootHandle ? 'Reconectar carpeta de medios' : 'Conectar carpeta de medios');
-    pulseConnectButton();
+  /* ═══════════ Llamadas al Worker ═══════════ */
+
+  async function workerPost(path, body) {
+    const res = await fetch(WORKER_URL + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    let data = {};
+    try { data = await res.json(); } catch { /* respuesta vacía */ }
+    if (!res.ok) throw new Error(data.error || ('Error ' + res.status));
+    return data;
   }
 
-  /* ── Permisos ── */
-  async function queryGranted() {
-    if (!rootHandle) return false;
+  async function persistContent() {
+    await workerPost('/save-json', { token, path: 'media/content.json', data: content });
+  }
+  async function persistManifest() {
+    await workerPost('/save-json', { token, path: 'media/manifest.json', data: manifest });
+  }
+
+  /* ═══════════ Carga pública: igual para todo el mundo ═══════════ */
+
+  async function fetchJson(url) {
     try {
-      return (await rootHandle.queryPermission({ mode: 'readwrite' })) === 'granted';
-    } catch { return false; }
-  }
-
-  // Solo se llama desde un click real (botón), nunca desde "drop":
-  // showDirectoryPicker/requestPermission exigen un gesto directo del usuario.
-  async function requestConnection() {
-    try {
-      if (rootHandle) {
-        const res = await rootHandle.requestPermission({ mode: 'readwrite' });
-        if (res === 'granted') { await activate(); return; }
-      }
-      rootHandle = await window.showDirectoryPicker({ id: 'coral-media-root', mode: 'readwrite' });
-      await idbSet('root', rootHandle);
-      await activate();
-    } catch (e) {
-      if (e && e.name !== 'AbortError') console.warn('Coral media:', e);
-    }
-  }
-
-  async function activate() {
-    mediaDir = await rootHandle.getDirectoryHandle('media', { create: true });
-    manifest = await readJson('manifest.json');
-    content = await readJson('content.json');
-    hideConnectButton();
-    await hydrateAll();
-    hydrateEditables();
-    hydrateVideoThumbs();
-    initGalleries();
-    showToast('Carpeta de medios conectada');
-    await processPendingChange();
-  }
-
-  async function readJson(filename) {
-    try {
-      const fh = await mediaDir.getFileHandle(filename);
-      const file = await fh.getFile();
-      return JSON.parse(await file.text());
+      const res = await fetch(url + '?t=' + Date.now(), { cache: 'no-store' });
+      if (!res.ok) return {};
+      return await res.json();
     } catch {
       return {};
     }
   }
-  async function writeManifest() {
-    const fh = await mediaDir.getFileHandle('manifest.json', { create: true });
-    const w = await fh.createWritable();
-    await w.write(JSON.stringify(manifest, null, 2));
-    await w.close();
-  }
-  async function writeContent() {
-    const fh = await mediaDir.getFileHandle('content.json', { create: true });
-    const w = await fh.createWritable();
-    await w.write(JSON.stringify(content, null, 2));
-    await w.close();
+
+  async function loadPublicData() {
+    manifest = await fetchJson(mediaBase + 'manifest.json');
+    content = await fetchJson(mediaBase + 'content.json');
+    hydrateAll();
+    hydrateEditablesStatic();
+    hydrateVideoThumbs();
+    initGalleriesStatic();
   }
 
-  async function processPendingChange() {
-    if (!pendingChange) return;
-    const pc = pendingChange;
-    pendingChange = null;
-    if (pc.kind === 'drop') await commitDrop(pc.el, pc.file);
-    else if (pc.kind === 'content') await commitContent(pc.id, pc.value);
-    else if (pc.kind === 'youtube') await commitYoutube(pc.mediaId, pc.videoId, pc.el);
-    else if (pc.kind === 'addGallery') await addNewGallerySlot(pc.container, pc.galleryId, pc.variant);
-  }
-
-  /* ═══════════ FOTOS Y VÍDEOS ARRASTRADOS ═══════════ */
+  /* ═══════════ FOTOS Y VÍDEOS ═══════════ */
 
   function renderSlot(el, type, url) {
     const old = el.querySelector('.media-content');
@@ -187,20 +102,14 @@
     el.classList.add('media-filled');
   }
 
-  async function hydrateOneSlot(el) {
+  function hydrateOneSlot(el) {
     const entry = manifest[el.dataset.mediaId];
     if (!entry) return;
-    try {
-      const fh = await mediaDir.getFileHandle(entry.file);
-      const file = await fh.getFile();
-      renderSlot(el, entry.type, URL.createObjectURL(file));
-    } catch { /* el archivo ya no está, se deja vacío */ }
+    renderSlot(el, entry.type, mediaBase + entry.file + '?t=' + Date.now());
   }
 
-  async function hydrateAll() {
-    for (const el of slots) {
-      await hydrateOneSlot(el);
-    }
+  function hydrateAll() {
+    slots.forEach(hydrateOneSlot);
   }
 
   function extOf(file) {
@@ -209,36 +118,98 @@
     return sub || (file.type.startsWith('video/') ? 'mp4' : 'jpg');
   }
 
-  async function commitDrop(el, file) {
-    const id = el.dataset.mediaId;
-    const type = file.type.startsWith('video/') ? 'video' : 'image';
-    const filename = id + '.' + extOf(file);
-
-    const prev = manifest[id];
-    if (prev && prev.file !== filename) {
-      try { await mediaDir.removeEntry(prev.file); } catch { /* no existía */ }
-    }
-
-    const fh = await mediaDir.getFileHandle(filename, { create: true });
-    const w = await fh.createWritable();
-    await w.write(file);
-    await w.close();
-
-    manifest[id] = { file: filename, type };
-    await writeManifest();
-
-    renderSlot(el, type, URL.createObjectURL(file));
-    showToast(type === 'video' ? 'Vídeo guardado' : 'Imagen guardada');
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
   }
 
-  /* ═══════════ TEXTOS EDITABLES (doble clic) ═══════════ */
+  function compressImage(file, maxDim, quality) {
+    maxDim = maxDim || 1600;
+    quality = quality || 0.82;
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const objUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) { height = Math.round(height * maxDim / width); width = maxDim; }
+          else { width = Math.round(width * maxDim / height); height = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(blob => {
+          URL.revokeObjectURL(objUrl);
+          if (!blob) { reject(new Error('No se pudo procesar la imagen')); return; }
+          const reader = new FileReader();
+          reader.onload = () => resolve({ base64: reader.result.split(',')[1], blob });
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        }, 'image/jpeg', quality);
+      };
+      img.onerror = () => reject(new Error('No se pudo leer la imagen'));
+      img.src = objUrl;
+    });
+  }
 
-  function hydrateEditables() {
+  async function commitDrop(el, file) {
+    const id = el.dataset.mediaId;
+    const isVideo = file.type.startsWith('video/');
+
+    try {
+      if (isVideo) {
+        const MAX_VIDEO_BYTES = 8 * 1024 * 1024;
+        if (file.size > MAX_VIDEO_BYTES) {
+          showToast('Ese vídeo pesa demasiado (máx. 8 MB). Súbelo más ligero o enlázalo como vídeo de YouTube.');
+          return;
+        }
+        showToast('Subiendo vídeo…');
+        const filename = id + '.' + extOf(file);
+        const prev = manifest[id];
+        if (prev && prev.file !== filename) {
+          try { await workerPost('/delete-file', { token, path: 'media/' + prev.file }); } catch { /* no existía */ }
+        }
+        const base64 = await fileToBase64(file);
+        await workerPost('/save-image', { token, path: 'media/' + filename, base64 });
+        manifest[id] = { file: filename, type: 'video' };
+        await persistManifest();
+        renderSlot(el, 'video', URL.createObjectURL(file));
+        showToast('Vídeo guardado, se publicará en un minuto');
+      } else {
+        showToast('Optimizando y subiendo imagen…');
+        const filename = id + '.jpg';
+        const prev = manifest[id];
+        if (prev && prev.file !== filename) {
+          try { await workerPost('/delete-file', { token, path: 'media/' + prev.file }); } catch { /* no existía */ }
+        }
+        const { base64, blob } = await compressImage(file);
+        await workerPost('/save-image', { token, path: 'media/' + filename, base64 });
+        manifest[id] = { file: filename, type: 'image' };
+        await persistManifest();
+        renderSlot(el, 'image', URL.createObjectURL(blob));
+        showToast('Imagen guardada, se publicará en un minuto');
+      }
+    } catch (e) {
+      showToast('No se pudo guardar: ' + e.message);
+    }
+  }
+
+  /* ═══════════ TEXTOS EDITABLES ═══════════ */
+
+  function hydrateEditablesStatic() {
     editables.forEach(el => {
       const id = el.dataset.editId;
-      if (content[id] === undefined) return;
-      if (el.dataset.editType === 'badge') renderBadge(el, content[id]);
-      else el.textContent = content[id];
+      if (el.dataset.editType === 'badge') {
+        renderBadge(el, content[id] !== undefined ? content[id] : (el.dataset.badgeState || 'upcoming'));
+      } else if (content[id] !== undefined) {
+        el.textContent = content[id];
+      }
     });
   }
 
@@ -250,8 +221,8 @@
       : '<i class="fa-solid fa-circle-dot" aria-hidden="true"></i> Próximamente';
   }
 
-  function enterEditMode(el) {
-    if (el.querySelector('input, textarea')) return; // ya está en edición
+  function enterTextEditMode(el) {
+    if (el.querySelector('input, textarea')) return;
     const isTextarea = el.dataset.editType === 'textarea';
     const original = el.textContent.trim();
     const field = document.createElement(isTextarea ? 'textarea' : 'input');
@@ -281,33 +252,16 @@
   }
 
   async function saveContent(id, value) {
-    if (mediaDir && await queryGranted()) {
-      await commitContent(id, value);
-    } else {
-      pendingChange = { kind: 'content', id, value };
-      askToConnect('Pulsa "Conectar carpeta" para guardar este cambio');
-    }
-  }
-  async function commitContent(id, value) {
     content[id] = value;
-    await writeContent();
-    showToast('Cambio guardado');
+    try {
+      await persistContent();
+      showToast('Cambio guardado, se publicará en un minuto');
+    } catch (e) {
+      showToast('No se pudo guardar: ' + e.message);
+    }
   }
 
-  editables.forEach(el => {
-    if (el.dataset.editType === 'badge') {
-      renderBadge(el, el.dataset.badgeState || 'upcoming');
-      el.addEventListener('click', () => {
-        const next = el.dataset.badgeState === 'past' ? 'upcoming' : 'past';
-        renderBadge(el, next);
-        saveContent(el.dataset.editId, next);
-      });
-    } else {
-      el.addEventListener('dblclick', () => enterEditMode(el));
-    }
-  });
-
-  /* ═══════════ VÍDEOS DE YOUTUBE (editables) ═══════════ */
+  /* ═══════════ VÍDEOS DE YOUTUBE ═══════════ */
 
   function extractYoutubeId(input) {
     if (!input) return null;
@@ -348,20 +302,16 @@
   }
 
   async function saveYoutube(mediaId, videoId, el) {
-    if (mediaDir && await queryGranted()) {
-      await commitYoutube(mediaId, videoId, el);
-    } else {
-      pendingChange = { kind: 'youtube', mediaId, videoId, el };
-      askToConnect('Pulsa "Conectar carpeta" para guardar el vídeo');
-    }
-  }
-  async function commitYoutube(mediaId, videoId, el) {
     content[mediaId + '-youtube'] = videoId;
-    await writeContent();
-    el.dataset.youtubeId = videoId;
-    el.classList.remove('media-empty');
-    if (!manifest[mediaId]) renderYoutubeThumb(el, videoId);
-    showToast('Vídeo actualizado');
+    try {
+      await persistContent();
+      el.dataset.youtubeId = videoId;
+      el.classList.remove('media-empty');
+      if (!manifest[mediaId]) renderYoutubeThumb(el, videoId);
+      showToast('Vídeo actualizado, se publicará en un minuto');
+    } catch (e) {
+      showToast('No se pudo guardar: ' + e.message);
+    }
   }
 
   /* Modal para pegar el enlace de YouTube */
@@ -404,16 +354,7 @@
     else if (e.key === 'Escape') closeYtModal();
   });
 
-  ytEditButtons.forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      e.preventDefault();
-      const targetEl = document.querySelector('.img-ph[data-media-id="' + btn.dataset.youtubeEditId + '"]');
-      if (targetEl) openYtModal(targetEl);
-    });
-  });
-
-  /* ═══════════ VISOR AMPLIADO (lightbox: foto / vídeo / YouTube) ═══════════ */
+  /* ═══════════ VISOR AMPLIADO (lightbox) — disponible para todo el mundo ═══════════ */
 
   const lightbox = document.createElement('div');
   lightbox.className = 'media-lightbox';
@@ -462,15 +403,29 @@
   lightbox.querySelector('.media-lightbox-close').addEventListener('click', closeLightbox);
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
 
-  /* ── Cablear cada hueco de foto/vídeo (reutilizable: slots fijos y dinámicos) ── */
-  function wireSlot(el) {
-    el.classList.add('media-empty');
+  function wireSlotBase(el) {
+    function activateSlot() {
+      if (el.dataset.youtubeId) { openYoutubeLightbox(el.dataset.youtubeId); return; }
+      if (el.dataset.noLightbox === 'true') return;
+      if (!el.classList.contains('media-filled')) return;
+      const node = el.querySelector('.media-content');
+      if (node) openLightbox(node);
+    }
+    el.addEventListener('click', activateSlot);
+    if (el.getAttribute('role') === 'button') {
+      el.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activateSlot(); }
+      });
+    }
+  }
+  slots.forEach(wireSlotBase);
 
+  function wireSlotEdit(el) {
+    el.classList.add('media-empty');
     el.addEventListener('dragenter', e => { e.preventDefault(); el.classList.add('media-dragover'); });
     el.addEventListener('dragover', e => { e.preventDefault(); });
     el.addEventListener('dragleave', () => el.classList.remove('media-dragover'));
-
-    el.addEventListener('drop', async e => {
+    el.addEventListener('drop', e => {
       e.preventDefault();
       el.classList.remove('media-dragover');
       const file = e.dataTransfer.files && e.dataTransfer.files[0];
@@ -479,37 +434,15 @@
         showToast('Solo se admiten imágenes o vídeos');
         return;
       }
-      if (mediaDir && await queryGranted()) {
-        commitDrop(el, file);
-      } else {
-        pendingChange = { kind: 'drop', el, file };
-        askToConnect('Pulsa "Conectar carpeta" para guardar esta imagen');
-      }
+      commitDrop(el, file);
     });
-
-    function activateSlot() {
-      if (el.dataset.youtubeId) { openYoutubeLightbox(el.dataset.youtubeId); return; }
-      if (el.dataset.noLightbox === 'true') return;
-      if (!el.classList.contains('media-filled')) return;
-      const node = el.querySelector('.media-content');
-      if (node) openLightbox(node);
-    }
-
-    el.addEventListener('click', activateSlot);
-    if (el.getAttribute('role') === 'button') {
-      el.addEventListener('keydown', e => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activateSlot(); }
-      });
-    }
   }
-
-  slots.forEach(wireSlot);
 
   /* ═══════════ GALERÍAS DINÁMICAS (botón "+ añadir foto") ═══════════ */
 
   function createGallerySlotEl(container, galleryId, suffix, variant) {
     const mediaId = galleryId + '-' + suffix;
-    if (container.querySelector('[data-media-id="' + mediaId + '"]')) return; // evita duplicados si ya existe
+    if (container.querySelector('[data-media-id="' + mediaId + '"]')) return;
     const addBtn = container.querySelector('[data-gallery-add]');
 
     let wrapper, slotEl;
@@ -545,10 +478,12 @@
     if (addBtn) container.insertBefore(wrapper, addBtn);
     else container.appendChild(wrapper);
 
-    wireSlot(slotEl);
+    wireSlotBase(slotEl);
     slots.push(slotEl);
     wireGalleryRemove(removeBtn, slotEl, wrapper, galleryId, suffix);
-    hydrateOneSlot(slotEl); // por si ya tenía foto guardada de una sesión anterior
+    hydrateOneSlot(slotEl);
+    if (editMode) wireSlotEdit(slotEl);
+    return slotEl;
   }
 
   function wireGalleryRemove(btn, slotEl, wrapper, galleryId, suffix) {
@@ -556,39 +491,47 @@
       e.preventDefault();
       e.stopPropagation();
       if (!confirm('¿Quitar esta foto de la galería?')) return;
-      const mediaId = slotEl.dataset.mediaId;
-      if (manifest[mediaId]) {
-        if (mediaDir) { try { await mediaDir.removeEntry(manifest[mediaId].file); } catch { /* no existía */ } }
-        delete manifest[mediaId];
-        if (mediaDir && await queryGranted()) await writeManifest();
+      try {
+        const mediaId = slotEl.dataset.mediaId;
+        if (manifest[mediaId]) {
+          try { await workerPost('/delete-file', { token, path: 'media/' + manifest[mediaId].file }); } catch { /* no existía */ }
+          delete manifest[mediaId];
+          await persistManifest();
+        }
+        const key = 'gallery:' + galleryId;
+        const current = Array.isArray(content[key]) ? content[key] : [];
+        const idx = current.indexOf(suffix);
+        if (idx > -1) {
+          current.splice(idx, 1);
+          content[key] = current;
+          await persistContent();
+        }
+        wrapper.remove();
+        const i = slots.indexOf(slotEl);
+        if (i > -1) slots.splice(i, 1);
+        showToast('Foto quitada, se publicará en un minuto');
+      } catch (err) {
+        showToast('No se pudo quitar: ' + err.message);
       }
-      const key = 'gallery:' + galleryId;
-      const current = Array.isArray(content[key]) ? content[key] : [];
-      const idx = current.indexOf(suffix);
-      if (idx > -1) {
-        current.splice(idx, 1);
-        content[key] = current;
-        if (mediaDir && await queryGranted()) await writeContent();
-      }
-      wrapper.remove();
-      const i = slots.indexOf(slotEl);
-      if (i > -1) slots.splice(i, 1);
-      showToast('Foto quitada');
     });
   }
 
   async function addNewGallerySlot(container, galleryId, variant) {
-    const suffix = 'extra-' + Date.now();
-    const key = 'gallery:' + galleryId;
-    const current = Array.isArray(content[key]) ? content[key].slice() : [];
-    current.push(suffix);
-    content[key] = current;
-    await writeContent();
-    createGallerySlotEl(container, galleryId, suffix, variant);
-    showToast('Hueco añadido: arrastra una foto sobre él');
+    try {
+      const suffix = 'extra-' + Date.now();
+      const key = 'gallery:' + galleryId;
+      const current = Array.isArray(content[key]) ? content[key].slice() : [];
+      current.push(suffix);
+      content[key] = current;
+      await persistContent();
+      createGallerySlotEl(container, galleryId, suffix, variant);
+      showToast('Hueco añadido: arrastra una foto sobre él');
+    } catch (e) {
+      showToast('No se pudo añadir: ' + e.message);
+    }
   }
 
-  function initGalleries() {
+  function initGalleriesStatic() {
     document.querySelectorAll('[data-gallery-id]').forEach(container => {
       const galleryId = container.dataset.galleryId;
       const variant = container.dataset.galleryVariant || 'grid';
@@ -601,27 +544,143 @@
   document.querySelectorAll('[data-gallery-add]').forEach(btn => {
     const container = btn.closest('[data-gallery-id]');
     if (!container) return;
-    const galleryId = container.dataset.galleryId;
-    const variant = container.dataset.galleryVariant || 'grid';
-    btn.addEventListener('click', async () => {
-      if (mediaDir && await queryGranted()) {
-        await addNewGallerySlot(container, galleryId, variant);
-      } else {
-        pendingChange = { kind: 'addGallery', container, galleryId, variant };
-        askToConnect('Pulsa "Conectar carpeta" para añadir una foto nueva');
-      }
+    btn.addEventListener('click', () => {
+      if (!editMode) return;
+      const galleryId = container.dataset.galleryId;
+      const variant = container.dataset.galleryVariant || 'grid';
+      addNewGallerySlot(container, galleryId, variant);
     });
   });
 
-  /* ── Arranque ── */
+  /* ═══════════ ACCESO: candado discreto + inicio de sesión + modo edición ═══════════ */
+
+  function tokenExpired(tok) {
+    try {
+      const payload = JSON.parse(atob(tok.split('.')[0]));
+      return !payload.exp || Date.now() > payload.exp;
+    } catch {
+      return true;
+    }
+  }
+
+  // Candado discreto, inyectado en el pie de página
+  const footerBottom = document.querySelector('.footer-bottom p') || document.querySelector('.footer-bottom');
+  let lockBtn = null;
+  let editPill = null;
+
+  function buildLockUI() {
+    if (!footerBottom) return;
+    lockBtn = document.createElement('button');
+    lockBtn.type = 'button';
+    lockBtn.className = 'coral-access-lock';
+    lockBtn.setAttribute('aria-label', 'Acceder al modo edición');
+    lockBtn.innerHTML = '<i class="fa-solid fa-lock" aria-hidden="true"></i>';
+    lockBtn.addEventListener('click', openLoginModal);
+    footerBottom.appendChild(lockBtn);
+
+    editPill = document.createElement('div');
+    editPill.className = 'coral-edit-pill';
+    editPill.innerHTML = '<i class="fa-solid fa-pen" aria-hidden="true"></i> Modo edición <button type="button" class="coral-edit-logout">Salir</button>';
+    document.body.appendChild(editPill);
+    editPill.querySelector('.coral-edit-logout').addEventListener('click', logout);
+  }
+
+  function logout() {
+    localStorage.removeItem(TOKEN_KEY);
+    location.reload();
+  }
+
+  /* Modal de inicio de sesión */
+  const loginModal = document.createElement('div');
+  loginModal.className = 'media-modal';
+  loginModal.innerHTML =
+    '<div class="media-modal-backdrop"></div>' +
+    '<div class="media-modal-card">' +
+      '<h3>Acceder</h3>' +
+      '<p>Inicia sesión para editar la web.</p>' +
+      '<input type="text" class="media-modal-input" placeholder="Usuario" autocomplete="username">' +
+      '<input type="password" class="media-modal-input" placeholder="Contraseña" autocomplete="current-password">' +
+      '<p class="coral-login-error" hidden></p>' +
+      '<div class="media-modal-actions">' +
+        '<button type="button" class="btn btn-outline media-modal-cancel">Cancelar</button>' +
+        '<button type="button" class="btn btn-primary media-modal-save">Entrar</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(loginModal);
+  const userInput = loginModal.querySelectorAll('.media-modal-input')[0];
+  const passInput = loginModal.querySelectorAll('.media-modal-input')[1];
+  const loginError = loginModal.querySelector('.coral-login-error');
+
+  function openLoginModal() {
+    userInput.value = '';
+    passInput.value = '';
+    loginError.hidden = true;
+    loginModal.classList.add('open');
+    setTimeout(() => userInput.focus(), 50);
+  }
+  function closeLoginModal() { loginModal.classList.remove('open'); }
+
+  loginModal.querySelector('.media-modal-backdrop').addEventListener('click', closeLoginModal);
+  loginModal.querySelector('.media-modal-cancel').addEventListener('click', closeLoginModal);
+
+  async function attemptLogin() {
+    const user = userInput.value.trim();
+    const pass = passInput.value;
+    if (!user || !pass) return;
+    try {
+      const data = await workerPost('/login', { user, pass });
+      token = data.token;
+      localStorage.setItem(TOKEN_KEY, token);
+      closeLoginModal();
+      enableEditMode();
+      showToast('Sesión iniciada');
+    } catch (e) {
+      loginError.textContent = e.message || 'Usuario o contraseña incorrectos';
+      loginError.hidden = false;
+    }
+  }
+  loginModal.querySelector('.media-modal-save').addEventListener('click', attemptLogin);
+  passInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); attemptLogin(); } });
+  userInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); passInput.focus(); } });
+
+  function enableEditMode() {
+    editMode = true;
+    document.body.classList.add('coral-edit-mode');
+    if (lockBtn) lockBtn.hidden = true;
+    if (editPill) editPill.classList.add('show');
+
+    slots.forEach(wireSlotEdit);
+    editables.forEach(el => {
+      if (el.dataset.editType === 'badge') {
+        el.addEventListener('click', () => {
+          const next = el.dataset.badgeState === 'past' ? 'upcoming' : 'past';
+          renderBadge(el, next);
+          saveContent(el.dataset.editId, next);
+        });
+      } else {
+        el.addEventListener('dblclick', () => enterTextEditMode(el));
+      }
+    });
+    ytEditButtons.forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        e.preventDefault();
+        const targetEl = document.querySelector('.img-ph[data-media-id="' + btn.dataset.youtubeEditId + '"]');
+        if (targetEl) openYtModal(targetEl);
+      });
+    });
+  }
+
+  /* ═══════════ Arranque ═══════════ */
+
   (async function init() {
-    rootHandle = await idbGet('root');
-    if (rootHandle && await queryGranted()) {
-      await activate();
-    } else if (rootHandle) {
-      showConnectButton('Reconectar carpeta de medios');
-    } else {
-      showConnectButton('Conectar carpeta de medios');
+    await loadPublicData();
+    buildLockUI();
+    if (token && !tokenExpired(token)) {
+      enableEditMode();
+    } else if (token) {
+      localStorage.removeItem(TOKEN_KEY);
+      token = null;
     }
   })();
 

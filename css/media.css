@@ -1,12 +1,14 @@
 /* ═══════════════════════════════════════════════════════════
    CORAL MIGUEL DE AMBIELA — Sistema de medios (estilos)
    No modifica main.css/home.css/pages.css; se añade aparte.
+   Las pistas de edición (arrastrar, lápiz, añadir/quitar) solo se ven
+   con la clase body.coral-edit-mode, es decir, tras iniciar sesión.
    ═══════════════════════════════════════════════════════════ */
 
-/* ── Huecos arrastrables ─────────────────────────────────── */
+/* ── Huecos de foto/vídeo ─────────────────────────────────── */
 .img-ph[data-media-id] { transition: outline-color 0.2s ease; }
 
-.img-ph.media-empty::after {
+body.coral-edit-mode .img-ph.media-empty::after {
   content: 'Arrastra una foto o vídeo aquí';
   position: absolute;
   inset: auto 0.6rem 0.6rem 0.6rem;
@@ -24,13 +26,13 @@
   pointer-events: none;
   transition: opacity 0.2s ease;
 }
-.img-ph.media-empty:hover::after { opacity: 1; }
+body.coral-edit-mode .img-ph.media-empty:hover::after { opacity: 1; }
 
 .img-ph.media-dragover {
   outline: 3px dashed var(--gold-soft);
   outline-offset: -3px;
 }
-.img-ph.media-dragover::after { opacity: 1; }
+body.coral-edit-mode .img-ph.media-dragover::after { opacity: 1; }
 
 .img-ph.media-filled::before { display: none; } /* oculta el icono ♪ del placeholder */
 .img-ph.media-filled { cursor: zoom-in; }
@@ -52,32 +54,60 @@
 /* El botón de YouTube siempre por encima de la miniatura, aunque se arrastre una foto */
 .video-thumb .video-play-btn { z-index: 2; }
 
-/* ── Botón flotante "Conectar carpeta" ───────────────────── */
-.media-connect-btn {
-  position: fixed;
-  bottom: 2rem;
-  left: 2rem;
-  z-index: 850;
-  display: flex;
+/* ── Candado discreto de acceso, en el pie de página ─────── */
+.coral-access-lock {
+  display: inline-flex;
   align-items: center;
-  gap: 0.6rem;
+  justify-content: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  margin-left: 0.75rem;
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(253,250,245,0.25);
+  font-size: 0.75rem;
+  transition: color 0.2s ease, background 0.2s ease;
+  vertical-align: middle;
+}
+.coral-access-lock:hover {
+  color: rgba(253,250,245,0.75);
+  background: rgba(255,255,255,0.08);
+}
+
+/* ── Indicador de modo edición activo ─────────────────────── */
+.coral-edit-pill {
+  position: fixed;
+  bottom: 1.4rem;
+  left: 50%;
+  transform: translate(-50%, 0);
+  z-index: 850;
+  display: none;
+  align-items: center;
+  gap: 0.7rem;
   background: var(--garnet);
   color: var(--white);
-  padding: 0.85rem 1.4rem;
+  padding: 0.65rem 1.2rem;
   border-radius: 999px;
   font-family: var(--font-body);
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 600;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
   box-shadow: var(--shadow-lg);
-  transition: transform 0.2s ease, background 0.2s ease;
 }
-.media-connect-btn:hover { transform: translateY(-2px); background: var(--garnet-light); }
-.media-connect-btn.pulse { animation: mediaPulse 0.4s ease 3; }
-@keyframes mediaPulse {
-  0%, 100% { transform: scale(1); }
-  50%      { transform: scale(1.07); }
+.coral-edit-pill.show { display: flex; }
+.coral-edit-pill .coral-edit-logout {
+  background: rgba(255,255,255,0.15);
+  color: var(--white);
+  border: none;
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
 }
+.coral-edit-pill .coral-edit-logout:hover { background: rgba(255,255,255,0.28); }
 
 /* ── Aviso flotante (toast) ──────────────────────────────── */
 .media-toast {
@@ -95,6 +125,8 @@
   pointer-events: none;
   z-index: 900;
   transition: opacity 0.25s ease, transform 0.25s ease;
+  max-width: min(90vw, 420px);
+  text-align: center;
 }
 .media-toast.show { opacity: 1; transform: translate(-50%, 0); }
 
@@ -174,15 +206,15 @@
   border: 0;
 }
 
-/* ── Textos editables (doble clic) ──────────────────────── */
-.editable {
+/* ── Textos editables (doble clic, solo en modo edición) ─── */
+body.coral-edit-mode .editable {
   cursor: text;
   border-radius: 3px;
   transition: background 0.15s ease, outline-color 0.15s ease;
   outline: 1px dashed transparent;
   outline-offset: 2px;
 }
-.editable:hover {
+body.coral-edit-mode .editable:hover {
   background: rgba(184,150,12,0.08);
   outline-color: rgba(184,150,12,0.45);
 }
@@ -202,12 +234,14 @@
 }
 .editable-input:focus { outline: none; border-style: solid; }
 
-/* Insignia próximamente/realizado, ahora pulsable */
-[data-edit-type="badge"] { cursor: pointer; user-select: none; }
-[data-edit-type="badge"]:hover { filter: brightness(0.96); }
+/* Insignia próximamente/realizado, solo pulsable en modo edición */
+body.coral-edit-mode [data-edit-type="badge"] { cursor: pointer; user-select: none; }
+body.coral-edit-mode [data-edit-type="badge"]:hover { filter: brightness(0.96); }
 
 /* ── Botón "editar vídeo" sobre las miniaturas de YouTube ── */
-.media-edit-btn {
+.media-edit-btn { display: none; }
+body.coral-edit-mode .media-edit-btn {
+  display: flex;
   position: absolute;
   top: 0.6rem;
   right: 0.6rem;
@@ -217,20 +251,19 @@
   border-radius: 50%;
   background: rgba(26,16,20,0.55);
   color: var(--white);
-  display: flex;
   align-items: center;
   justify-content: center;
   font-size: 0.8rem;
   opacity: 0;
   transition: opacity 0.2s ease, background 0.2s ease;
 }
-.video-thumb:hover .media-edit-btn,
-.media-edit-btn:focus-visible {
+body.coral-edit-mode .video-thumb:hover .media-edit-btn,
+body.coral-edit-mode .media-edit-btn:focus-visible {
   opacity: 1;
 }
-.media-edit-btn:hover { background: var(--garnet); }
+body.coral-edit-mode .media-edit-btn:hover { background: var(--garnet); }
 
-/* ── Modal para pegar el enlace de YouTube ──────────────── */
+/* ── Modales (vídeo de YouTube / acceder) ────────────────── */
 .media-modal {
   position: fixed;
   inset: 0;
@@ -281,20 +314,27 @@
   box-shadow: 0 0 0 3px rgba(92,16,32,0.1);
 }
 .media-modal-actions { display: flex; gap: 0.8rem; justify-content: flex-end; }
+.coral-login-error {
+  font-size: 0.82rem;
+  color: #B3261E;
+  margin: -0.6rem 0 1rem;
+}
 
-/* ── Galerías dinámicas (botón "+ añadir foto") ──────────────── */
+/* ── Galerías dinámicas (botón "+ añadir foto", solo en modo edición) ── */
 .dyn-gallery-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 1.2rem;
 }
-.dyn-gallery-grid > .img-ph,
-.dyn-gallery-grid > .dyn-gallery-add {
+.dyn-gallery-grid > .img-ph {
   flex: 1 1 220px;
   height: 220px;
 }
 .dyn-gallery-add,
-.gallery-add-item {
+.gallery-add-item { display: none; }
+body.coral-edit-mode .dyn-gallery-add,
+body.coral-edit-mode .gallery-add-item {
+  flex: 1 1 220px;
   height: 220px;
   border: 2px dashed rgba(92,16,32,0.28);
   border-radius: var(--radius);
@@ -312,15 +352,18 @@
   width: 100%;
   transition: background 0.2s ease, border-color 0.2s ease;
 }
-.gallery-add-item { break-inside: avoid; }
-.dyn-gallery-add:hover,
-.gallery-add-item:hover {
+body.coral-edit-mode .gallery-add-item { break-inside: avoid; }
+body.coral-edit-mode .dyn-gallery-add:hover,
+body.coral-edit-mode .gallery-add-item:hover {
   background: rgba(92,16,32,0.05);
   border-color: var(--garnet);
 }
-.dyn-gallery-add i,
-.gallery-add-item i { font-size: 1.7rem; }
-.dyn-slot-remove {
+body.coral-edit-mode .dyn-gallery-add i,
+body.coral-edit-mode .gallery-add-item i { font-size: 1.7rem; }
+
+.dyn-slot-remove { display: none; }
+body.coral-edit-mode .dyn-slot-remove {
+  display: flex;
   position: absolute;
   top: 0.5rem;
   right: 0.5rem;
@@ -332,7 +375,6 @@
   color: #fff;
   font-size: 1rem;
   line-height: 1;
-  display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
@@ -340,13 +382,13 @@
   transition: opacity 0.2s ease, background 0.2s ease;
   z-index: 6;
 }
-.img-ph:hover .dyn-slot-remove { opacity: 1; }
-.dyn-slot-remove:hover { background: var(--garnet); }
+body.coral-edit-mode .img-ph:hover .dyn-slot-remove { opacity: 1; }
+body.coral-edit-mode .dyn-slot-remove:hover { background: var(--garnet); }
 
 /* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 640px) {
-  .media-connect-btn { left: 1rem; right: 1rem; bottom: 1rem; justify-content: center; }
   .img-ph.media-empty::after { font-size: 0.6rem; }
-  .media-edit-btn { opacity: 1; } /* en móvil no hay "hover", se ve siempre */
-  .dyn-slot-remove { opacity: 1; }
+  body.coral-edit-mode .media-edit-btn { opacity: 1; } /* en móvil no hay "hover", se ve siempre */
+  body.coral-edit-mode .dyn-slot-remove { opacity: 1; }
+  .coral-edit-pill { left: 1rem; right: 1rem; transform: none; justify-content: center; }
 }
