@@ -98,5 +98,9 @@
   "multimedia-galeria-7": {
     "file": "multimedia-galeria-7.jpg",
     "type": "image"
+  },
+  "multimedia-galeria-5": {
+    "file": "multimedia-galeria-5.jpg",
+    "type": "image"
   }
 }
