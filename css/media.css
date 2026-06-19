@@ -226,7 +226,7 @@ body.coral-edit-mode .editable:hover {
 .editable-input {
   width: 100%;
   font: inherit;
-  color: inherit;
+  color: var(--ink);
   background: var(--parchment);
   border: 1px dashed var(--gold);
   border-radius: 4px;

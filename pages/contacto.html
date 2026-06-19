@@ -113,6 +113,10 @@
       <h2>Escríbenos o <em>apúntate</em></h2>
       <p class="editable" data-edit-id="contacto-form-texto" data-edit-type="text">Rellena el formulario y te contactaremos para darte todos los detalles.</p>
       <form class="form-grid" id="contact-form" novalidate>
+        <input type="hidden" name="access_key" value="0bdf4790-b8f3-4b6d-8277-672ead5352dd">
+        <input type="hidden" name="subject" value="Nuevo mensaje desde la web de la Coral Miguel de Ambiela">
+        <input type="hidden" name="from_name" value="Web Coral Miguel de Ambiela">
+        <input type="checkbox" name="botcheck" style="display:none" tabindex="-1" autocomplete="off">
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.2rem;">
           <div class="form-field">
             <label for="nombre">Nombre</label>
@@ -312,9 +316,10 @@ document.querySelectorAll('.faq-trigger').forEach(btn => {
   });
 });
 
-// Form submit (frontend-only demo)
-document.getElementById('contact-form').addEventListener('submit', e => {
+// Form submit (envío real a través de Web3Forms, gratuito)
+document.getElementById('contact-form').addEventListener('submit', async e => {
   e.preventDefault();
+  const form = e.target;
   const fb = document.getElementById('form-feedback');
   const nombre = document.getElementById('nombre').value.trim();
   const email  = document.getElementById('email').value.trim();
@@ -323,9 +328,36 @@ document.getElementById('contact-form').addEventListener('submit', e => {
     fb.style.color = 'var(--garnet)';
     return;
   }
-  fb.textContent = '¡Gracias, ' + nombre + '! Te contactaremos pronto. ¡Te esperamos el próximo lunes!';
-  fb.style.color = '#2A6B1A';
-  e.target.reset();
+  const accessKey = form.querySelector('input[name="access_key"]').value;
+  if (!accessKey || accessKey === 'PEGA_AQUI_TU_CLAVE_DE_WEB3FORMS') {
+    fb.textContent = 'El formulario todavía no está conectado (falta la clave de Web3Forms). Mientras tanto, escríbenos directamente por Facebook o por teléfono.';
+    fb.style.color = 'var(--garnet)';
+    return;
+  }
+  const submitBtn = form.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  fb.textContent = 'Enviando...';
+  fb.style.color = 'var(--ink-muted)';
+  try {
+    const res = await fetch('https://api.web3forms.com/submit', {
+      method: 'POST',
+      headers: { 'Accept': 'application/json' },
+      body: new FormData(form)
+    });
+    const data = await res.json();
+    if (data.success) {
+      fb.textContent = '¡Gracias, ' + nombre + '! Te contactaremos pronto. ¡Te esperamos el próximo lunes!';
+      fb.style.color = '#2A6B1A';
+      form.reset();
+    } else {
+      throw new Error(data.message || 'Error al enviar');
+    }
+  } catch (err) {
+    fb.textContent = 'No se pudo enviar el mensaje. Inténtalo de nuevo en un momento, o escríbenos directamente por Facebook.';
+    fb.style.color = 'var(--garnet)';
+  } finally {
+    submitBtn.disabled = false;
+  }
 });
 </script>
 </body>

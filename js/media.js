@@ -35,7 +35,8 @@
     toastEl.textContent = msg;
     toastEl.classList.add('show');
     clearTimeout(toastEl._t);
-    toastEl._t = setTimeout(() => toastEl.classList.remove('show'), 3200);
+    const duration = Math.min(7000, Math.max(3200, msg.length * 60));
+    toastEl._t = setTimeout(() => toastEl.classList.remove('show'), duration);
   }
 
   /* ═══════════ Llamadas al Worker ═══════════ */
@@ -153,7 +154,7 @@
           reader.readAsDataURL(blob);
         }, 'image/jpeg', quality);
       };
-      img.onerror = () => reject(new Error('No se pudo leer la imagen'));
+      img.onerror = () => reject(new Error('Este navegador no puede leer ese formato de imagen (frecuente con fotos HEIC de iPhone). Prueba a exportarla o compartirla antes como JPG.'));
       img.src = objUrl;
     });
   }
