@@ -6,5 +6,9 @@
   "componentes-alberto": {
     "file": "componentes-alberto.jpg",
     "type": "image"
+  },
+  "componentes-fernando": {
+    "file": "componentes-fernando.jpg",
+    "type": "image"
   }
 }
