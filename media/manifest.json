@@ -146,5 +146,9 @@
   "conciertos-madrid-2010": {
     "file": "conciertos-madrid-2010.jpg",
     "type": "image"
+  },
+  "conciertos-santiago-2011": {
+    "file": "conciertos-santiago-2011.jpg",
+    "type": "image"
   }
 }
