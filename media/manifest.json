@@ -78,5 +78,9 @@
   "home-about-2": {
     "file": "home-about-2.jpg",
     "type": "image"
+  },
+  "home-about-1": {
+    "file": "home-about-1.jpg",
+    "type": "image"
   }
 }
