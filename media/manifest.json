@@ -142,5 +142,9 @@
   "conciertos-navidad-anual": {
     "file": "conciertos-navidad-anual.jpg",
     "type": "image"
+  },
+  "conciertos-madrid-2010": {
+    "file": "conciertos-madrid-2010.jpg",
+    "type": "image"
   }
 }
