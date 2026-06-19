@@ -62,5 +62,9 @@
   "historia-presidente-sofia": {
     "file": "historia-presidente-sofia.jpg",
     "type": "image"
+  },
+  "historia-presidente-angel": {
+    "file": "historia-presidente-angel.jpg",
+    "type": "image"
   }
 }
