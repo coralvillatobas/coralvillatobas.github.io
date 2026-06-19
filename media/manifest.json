@@ -14,5 +14,9 @@
   "componentes-david": {
     "file": "componentes-david.jpg",
     "type": "image"
+  },
+  "multimedia-galeria-1": {
+    "file": "multimedia-galeria-1.jpg",
+    "type": "image"
   }
 }
