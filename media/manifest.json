@@ -134,5 +134,9 @@
   "conciertos-malaga-2018": {
     "file": "conciertos-malaga-2018.jpg",
     "type": "image"
+  },
+  "conciertos-miguelesteban-2023": {
+    "file": "conciertos-miguelesteban-2023.jpg",
+    "type": "image"
   }
 }
