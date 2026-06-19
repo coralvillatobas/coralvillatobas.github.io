@@ -95,6 +95,7 @@ body.coral-edit-mode .img-ph.media-dragover::after { opacity: 1; }
   box-shadow: var(--shadow-lg);
 }
 .coral-edit-pill.show { display: flex; }
+body.coral-edit-mode .site-footer { padding-bottom: 6rem; }
 .coral-edit-pill .coral-edit-logout {
   background: rgba(255,255,255,0.15);
   color: var(--white);

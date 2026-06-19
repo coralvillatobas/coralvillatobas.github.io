@@ -440,7 +440,7 @@ h4 { font-size: 1.2rem; }
 .back-top:hover { background: var(--garnet-light); transform: translateY(-2px); }
 
 /* ── Responsive nav ──────────────────────────────────────── */
-@media (max-width: 860px) {
+@media (max-width: 1180px) {
   .nav-links { display: none; }
   .nav-toggle { display: flex; }
 

@@ -267,6 +267,7 @@
 
 @media (max-width: 560px) {
   .hero-title { font-size: clamp(3rem, 14vw, 5rem); }
+  .hero-scroll { display: none; }
   .about-visual { grid-template-columns: 1fr; }
   .about-img-small { display: none; }
   .about-img { height: 280px; }
