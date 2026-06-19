@@ -42,5 +42,9 @@
   "multimedia-galeria-9": {
     "file": "multimedia-galeria-9.jpg",
     "type": "image"
+  },
+  "multimedia-galeria-4": {
+    "file": "multimedia-galeria-4.jpg",
+    "type": "image"
   }
 }
