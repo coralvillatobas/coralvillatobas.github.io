@@ -18,5 +18,9 @@
   "multimedia-galeria-1": {
     "file": "multimedia-galeria-1.jpg",
     "type": "image"
+  },
+  "multimedia-galeria-6": {
+    "file": "multimedia-galeria-6.jpg",
+    "type": "image"
   }
 }
