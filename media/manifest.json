@@ -10,5 +10,9 @@
   "componentes-fernando": {
     "file": "componentes-fernando.jpg",
     "type": "image"
+  },
+  "componentes-david": {
+    "file": "componentes-david.jpg",
+    "type": "image"
   }
 }
