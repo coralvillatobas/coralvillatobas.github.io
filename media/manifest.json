@@ -66,5 +66,9 @@
   "historia-presidente-angel": {
     "file": "historia-presidente-angel.jpg",
     "type": "image"
+  },
+  "historia-presidente-joseluis": {
+    "file": "historia-presidente-joseluis.jpg",
+    "type": "image"
   }
 }
