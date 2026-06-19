@@ -82,5 +82,9 @@
   "home-about-1": {
     "file": "home-about-1.jpg",
     "type": "image"
+  },
+  "aniversario-portada": {
+    "file": "aniversario-portada.jpg",
+    "type": "image"
   }
 }
