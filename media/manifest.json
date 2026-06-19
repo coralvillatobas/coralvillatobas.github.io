@@ -138,5 +138,9 @@
   "conciertos-miguelesteban-2023": {
     "file": "conciertos-miguelesteban-2023.jpg",
     "type": "image"
+  },
+  "conciertos-navidad-anual": {
+    "file": "conciertos-navidad-anual.jpg",
+    "type": "image"
   }
 }
